@@ -1,6 +1,6 @@
 import vine from "@vinejs/vine";
 import { newsSchema } from "../validations/newsValidation.js";
-import { generateRandomNumber, imageValidator } from "../utils/helper.js";
+import { generateRandomNumber, imageValidator, removeImage } from "../utils/helper.js";
 import prisma from "../DB/db.config.js";
 import NewsApiTransform from "../transform/newsApiTransform.js";
 
@@ -105,12 +105,121 @@ class NewsController {
     }
 
     static async show(req, res) {
+        try {
+            const { id } = req.params;
+            const news = await prisma.news.findUnique({
+                where: {
+                    id: Number(id)
+                },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            profile: true
+                        }
+                    }
+                }
+            })
+
+            const transformNews = news ? NewsApiTransform.transform(news) : null;
+
+            return res.status(200).json({ news: transformNews })
+        } catch (error) {
+            console.error("Internal server error:", error);
+            return res.status(500).json({ message: "Internal server error" });
+        }
 
     }
     static async update(req, res) {
+        try {
+            const { id } = req.params;
+            const user = req.user;
+            const body = req.body;
+
+            const news = await prisma.news.findUnique({
+                where: {
+                    id: Number(id)
+                }
+            })
+
+            if (user.id !== news.user_id) {
+                return res.status(400).json({ message: "Unauthorized user" })
+            }
+
+            const validator = vine.compile(newsSchema);
+            const payload = await validator.validate(body);
+
+            const image = req?.files?.image;
+            if (image) {
+                const message = imageValidator(image?.size, image?.mimetype);
+                if (message !== null) {
+                    return res.status(400).json({ message: message })
+                }
+
+                //upload new image
+
+                const imgExt = image.name.split(".").pop();
+                const imageName = generateRandomNumber() + "." + imgExt;
+                const uploadPath = process.cwd() + "/public/images/" + imageName;
+
+                // Move the file and update the payload only after a successful upload
+                image.mv(uploadPath, async (err) => {
+                    if (err) {
+                        console.error("File upload error:", err);
+                        return res.status(500).json({ message: "Image upload failed" });
+                    }
+
+                    console.log("Image successfully uploaded to", uploadPath);
+                }
+                )
+
+                //delete old image
+                removeImage(news.image)
+
+            }
+
+            await prisma.news.update({
+                data: payload,
+                where: {
+                    id: Number(id)
+                }
+            })
+
+            return res.status(200).json({ message: "News updated successfully" })
+        } catch (error) {
+            console.error("Internal server error:", error);
+            return res.status(500).json({ message: "Internal server error" });
+        }
 
     }
     static async destroy(req, res) {
+        try {
+            const { id } = req.params;
+            const user = req.user;
+
+            const news = await prisma.news.findUnique({
+                where: {
+                    id: Number(id)
+                }
+            })
+
+            if (user.id !== news?.user_id) {
+                return res.status(401).json({ message: "Unauthorized" })
+            }
+
+            removeImage(news.image);
+
+            await prisma.news.delete({
+                where: {
+                    id: Number(id)
+                }
+            })
+            return res.status(200).json({ message: "News deleted successfully" });
+        } catch (error) {
+            console.error("Internal server error:", error);
+            return res.status(500).json({ message: "Internal server error" });
+        }
 
     }
 }

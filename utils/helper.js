@@ -1,5 +1,6 @@
 import { supportMimes } from "../config/fileSystem.js";
 import { v4 as uuidv4 } from "uuid";
+import fs from 'fs';
 
 export const imageValidator = (size, mime) => {
     if (byteToMb(size) > 2) {
@@ -21,4 +22,11 @@ export const generateRandomNumber = () => {
 
 export const getImageUrl = (imageName) => {
     return `${process.env.APP_URL}/images/${imageName}`
+}
+
+export const removeImage = (imageName) => {
+    const path = process.cwd() + "/public/images/" + imageName;
+    if (fs.existsSync(path)) {
+        fs.unlinkSync(path)
+    }
 }
