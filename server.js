@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import ApiRoutes from "./routes/api.js"
+import fileUpload from "express-fileupload"
 
 const app = express();
 dotenv.config();
@@ -12,6 +13,7 @@ app.get("/", (req, res) => {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }))
+app.use(fileUpload());
 
 //
 app.use('/api', ApiRoutes);
